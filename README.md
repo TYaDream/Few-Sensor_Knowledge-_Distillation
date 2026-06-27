@@ -1,27 +1,18 @@
-#Gas Sensor Distillation
+# Zhang Gas Sensor Teacher-Student Baseline
 
-Code release for gas sensor concentration regression experiments on Zhang's dataset. The repository contains the training/evaluation code, experiment launch scripts, and table-generation utilities for teacher-student knowledge distillation baselines and FSKD variants.
+Minimal code for gas sensor concentration regression on Zhang's dataset. This repository only keeps the basic dataset loader, teacher model, student model, and a simple teacher-student distillation training script.
 
-> Data files, model checkpoints, and generated experiment outputs are intentionally not included. Put your dataset and checkpoints in local folders and pass their paths through command-line arguments.
+> Dataset files, checkpoints, and generated results are not included.
 
-## Repository Structure
+## Structure
 
 ```text
 .
 ├── src/
-│   ├── data.py                         # Dataset loading and preprocessing
-│   ├── model.py                        # Teacher/student model definitions and KD losses
-│   ├── run_zhang_paper_experiments.py  # Main baselines, FSKD, ablation, analysis runner
-│   └── run_zhang_top50.py              # Top-k reliable-sample FSKD runner
-├── scripts/
-│   ├── run_paper_baselines_8tasks.ps1
-│   ├── run_gamma_temperature_parallel.ps1
-│   ├── run_top50_grid.ps1
-│   ├── run_top50_smallgamma_grid.ps1
-│   ├── run_best_task_ablation.ps1
-│   ├── summarize_paper_baselines.py
-│   └── make_paper_tables_zhang.py
-├── results/                            # Empty placeholder for local outputs
+│   ├── data.py                    # Dataset loading and preprocessing
+│   ├── model.py                   # Teacher/student network definitions
+│   └── train_teacher_student.py   # Basic teacher-student training script
+├── results/                       # Local output folder placeholder
 ├── requirements.txt
 └── README.md
 ```
@@ -31,8 +22,8 @@ Code release for gas sensor concentration regression experiments on Zhang's data
 Recommended:
 
 - Python 3.9+
-- CUDA-capable GPU for full 1000-epoch experiments
-- Windows PowerShell if using the provided `.ps1` launch scripts
+- PyTorch
+- CUDA GPU is optional but recommended for training
 
 Install dependencies:
 
@@ -42,92 +33,70 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-If you need a specific CUDA build of PyTorch, install PyTorch first from the official selector, then run `pip install -r requirements.txt`.
+If you need a specific CUDA version of PyTorch, install PyTorch first from the official PyTorch website, then run `pip install -r requirements.txt`.
 
-## Data Preparation
+## Dataset
 
-The code expects `--data-root` to point to the preprocessed Zhang gas sensor dataset directory. The original dataset is not included in this repository.
-
-Example local layout:
+Pass the dataset folder with `--data-root`. The expected layout is one folder per concentration label, where the folder name contains three comma-separated target values:
 
 ```text
 /path/to/zhang_dataset/
-├── ... dataset files used by src/data.py ...
+├── 100,20,50/
+│   ├── sample1.txt
+│   └── sample2.txt
+├── 200,40,100/
+│   └── sample3.txt
+└── ...
 ```
 
-Teacher/student checkpoint files are also excluded. If you want to reuse pretrained models, pass `--pretrained-core-root` and enable `--load-pretrained-students` or `--require-pretrained-teacher` as needed.
+Each `.txt`/`.TXT` file should contain sensor response data. The loader uses the first 4 sensor columns and resizes each sample to `--sequence-length`.
 
-## Quick Start
+## Run
 
-Run a small smoke experiment first:
+Example training command:
 
 ```bash
-python src/run_zhang_paper_experiments.py ^
+python src/train_teacher_student.py ^
   --data-root "D:\path\to\zhang_dataset" ^
-  --output-dir results/smoke ^
-  --experiments main ^
-  --methods no_kd fitnet ^
-  --backbones gru ^
-  --channels 0 ^
-  --teacher-epochs 2 ^
-  --student-epochs 2 ^
+  --output-dir results/basic ^
+  --teacher-epochs 100 ^
+  --student-epochs 100 ^
   --batch-size 32
 ```
 
-Run the full paper-style comparison:
+For a quick test, use fewer epochs:
 
 ```bash
-python src/run_zhang_paper_experiments.py ^
+python src/train_teacher_student.py ^
   --data-root "D:\path\to\zhang_dataset" ^
-  --output-dir results/paper_baselines ^
-  --experiments main ablation_student ablation_teacher analysis ^
-  --methods fskd fitnet at sp vid rkd_d rkd_a rkd_full no_kd ^
-  --backbones gru lstm ^
-  --channels 0 1 2 3 ^
-  --teacher-epochs 1000 ^
-  --student-epochs 1000
+  --output-dir results/smoke ^
+  --teacher-epochs 2 ^
+  --student-epochs 2
 ```
 
-Run the Top-50 reliable-sample FSKD variant:
+## What the Script Does
 
-```bash
-python src/run_zhang_top50.py ^
-  --data-root "D:\path\to\zhang_dataset" ^
-  --output-dir results/top50 ^
-  --experiments main ^
-  --methods fskd ^
-  --backbones gru lstm ^
-  --channels 0 1 2 3 ^
-  --fskd-reliable-select topk ^
-  --fskd-topk-ratio 0.5
-```
+1. Loads Zhang gas sensor samples with `ZhangGasDataset`.
+2. Splits data into 60% train, 20% validation, and 20% test.
+3. Trains a larger teacher model with supervised MSE loss.
+4. Trains a smaller student model using supervised loss plus teacher prediction distillation loss.
+5. Saves outputs to `--output-dir`:
+   - `teacher.pt`
+   - `student.pt`
+   - `metrics.json`
 
-## PowerShell Scripts
+## Main Arguments
 
-The scripts in `scripts/` reproduce the larger experiment batches used during development. Before running them, edit the path variables near the top of each script, especially:
+- `--data-root`: dataset directory, required.
+- `--output-dir`: output directory, default `results/basic`.
+- `--sequence-length`: sequence length, default `200`.
+- `--teacher-epochs`: teacher training epochs, default `100`.
+- `--student-epochs`: student training epochs, default `100`.
+- `--teacher-dim`: teacher hidden dimension, default `64`.
+- `--student-dim`: student hidden dimension, default `32`.
+- `--rnn-type`: `gru` or `lstm`, default `gru`.
+- `--distill-alpha`: weight of teacher prediction loss, default `0.5`.
 
-- `$DataRoot`: local dataset directory
-- `$ResultRoot` / `$OutputRoot`: local output directory
-- `$TeacherCache`: local teacher checkpoint cache, if used
+## Notes
 
-Example:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_paper_baselines_8tasks.ps1
-```
-
-## Outputs
-
-Experiment runners write CSV/JSON outputs under the selected `--output-dir`, including per-run metrics, merged summaries, run configurations, and analysis artifacts. Generated outputs are ignored by Git by default.
-
-## Notes for Reproducibility
-
-- Default random seed is `1024`.
-- Default split is 60% train, 20% test, 20% validation.
-- Default full training uses 1000 teacher epochs and 1000 student epochs.
-- `src/run_zhang_paper_experiments.py` contains the main baseline methods: NoKD, FitNet, AT, SP, VID, RKD-D, RKD-A, RKD-Full, and FSKD.
-- `src/run_zhang_top50.py` contains the reliable-sample Top-k FSKD variant.
-
-## Citation
-
-If this code is used in a paper or report, please cite the corresponding project/paper when available.
+This is a clean baseline version intended for GitHub release. It does not include comparison experiments, ablation experiments, grid search scripts, paper table generation, original datasets, or trained checkpoints.
