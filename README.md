@@ -1,31 +1,25 @@
 # Zhang Gas Sensor Teacher-Student Baseline
 
-Minimal code for gas sensor concentration regression on Zhang's dataset. This repository only keeps the basic dataset loader, teacher model, student model, and a simple teacher-student distillation training script.
+This repository provides a minimal teacher-student distillation baseline for gas concentration regression on Zhang's gas sensor dataset. It only keeps the essential code: dataset loading, teacher/student model definitions, and a basic training script.
 
-> Dataset files, checkpoints, and generated results are not included.
+This repository does not include the dataset, generated results, trained weights, ablation experiments, or comparison experiments.
 
-## Structure
+## Project Structure
 
 ```text
 .
 ├── src/
 │   ├── data.py                    # Dataset loading and preprocessing
-│   ├── model.py                   # Teacher/student network definitions
+│   ├── model.py                   # Teacher and student model definitions
 │   └── train_teacher_student.py   # Basic teacher-student training script
 ├── results/                       # Local output folder placeholder
-├── requirements.txt
+├── requirements.txt               # Python dependencies
 └── README.md
 ```
 
 ## Environment
 
-Recommended:
-
-- Python 3.9+
-- PyTorch
-- CUDA GPU is optional but recommended for training
-
-Install dependencies:
+Python 3.9 or later is recommended.
 
 ```bash
 python -m venv .venv
@@ -33,11 +27,11 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-If you need a specific CUDA version of PyTorch, install PyTorch first from the official PyTorch website, then run `pip install -r requirements.txt`.
+If you want to train with a GPU, install the PyTorch version that matches your CUDA environment first, then install the remaining dependencies.
 
-## Dataset
+## Dataset Format
 
-Pass the dataset folder with `--data-root`. The expected layout is one folder per concentration label, where the folder name contains three comma-separated target values:
+Use `--data-root` to specify the dataset directory. The dataset should be organized by concentration labels. Each subfolder name should contain three comma-separated target values, for example:
 
 ```text
 /path/to/zhang_dataset/
@@ -49,11 +43,11 @@ Pass the dataset folder with `--data-root`. The expected layout is one folder pe
 └── ...
 ```
 
-Each `.txt`/`.TXT` file should contain sensor response data. The loader uses the first 4 sensor columns and resizes each sample to `--sequence-length`.
+Each `.txt` or `.TXT` file contains sensor response data. The current loader uses the first 4 sensor columns and resizes each sample to `--sequence-length`.
 
-## Run
+## Usage
 
-Example training command:
+Basic training command:
 
 ```bash
 python src/train_teacher_student.py ^
@@ -64,7 +58,7 @@ python src/train_teacher_student.py ^
   --batch-size 32
 ```
 
-For a quick test, use fewer epochs:
+Quick smoke test:
 
 ```bash
 python src/train_teacher_student.py ^
@@ -74,29 +68,49 @@ python src/train_teacher_student.py ^
   --student-epochs 2
 ```
 
-## What the Script Does
+## Training Pipeline
 
-1. Loads Zhang gas sensor samples with `ZhangGasDataset`.
-2. Splits data into 60% train, 20% validation, and 20% test.
-3. Trains a larger teacher model with supervised MSE loss.
-4. Trains a smaller student model using supervised loss plus teacher prediction distillation loss.
-5. Saves outputs to `--output-dir`:
-   - `teacher.pt`
-   - `student.pt`
-   - `metrics.json`
+`src/train_teacher_student.py` performs the following steps:
+
+1. Loads samples with `ZhangGasDataset`.
+2. Splits the dataset into 60% training, 20% validation, and 20% testing.
+3. Trains the teacher model with supervised MSE loss.
+4. Trains the student model after the teacher is trained.
+5. Uses both supervised label loss and teacher prediction distillation loss for student training.
+6. Saves model weights and test metrics to the output directory.
+
+The output directory contains:
+
+```text
+results/basic/
+├── teacher.pt
+├── student.pt
+└── metrics.json
+```
 
 ## Main Arguments
 
-- `--data-root`: dataset directory, required.
-- `--output-dir`: output directory, default `results/basic`.
-- `--sequence-length`: sequence length, default `200`.
-- `--teacher-epochs`: teacher training epochs, default `100`.
-- `--student-epochs`: student training epochs, default `100`.
-- `--teacher-dim`: teacher hidden dimension, default `64`.
-- `--student-dim`: student hidden dimension, default `32`.
-- `--rnn-type`: `gru` or `lstm`, default `gru`.
-- `--distill-alpha`: weight of teacher prediction loss, default `0.5`.
+- `--data-root`: Path to the dataset directory. Required.
+- `--output-dir`: Output directory. Default: `results/basic`.
+- `--sequence-length`: Input sequence length. Default: `200`.
+- `--batch-size`: Batch size. Default: `32`.
+- `--teacher-epochs`: Number of teacher training epochs. Default: `100`.
+- `--student-epochs`: Number of student training epochs. Default: `100`.
+- `--teacher-dim`: Hidden dimension of the teacher model. Default: `64`.
+- `--student-dim`: Hidden dimension of the student model. Default: `32`.
+- `--rnn-type`: Recurrent backbone type, either `gru` or `lstm`. Default: `gru`.
+- `--distill-alpha`: Weight of the teacher prediction distillation loss. Default: `0.5`.
 
 ## Notes
 
-This is a clean baseline version intended for GitHub release. It does not include comparison experiments, ablation experiments, grid search scripts, paper table generation, original datasets, or trained checkpoints.
+This is a clean minimal release. It does not include:
+
+- Ablation experiments
+- Comparison experiments
+- Top-k / Top-50 experiments
+- Hyperparameter grid search scripts
+- Paper table generation scripts
+- Original dataset files
+- Trained model checkpoints
+
+To reproduce results, prepare the dataset locally and adjust the number of epochs and model parameters as needed.
